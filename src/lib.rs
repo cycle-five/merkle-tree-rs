@@ -34,7 +34,7 @@ impl MerkleTree {
 
         // It was a bit ambigious in the problem definition but it seems the
         // leaves are indeed hashed values.
-        let initial_leaf = initial_leaf; //Self::compute_hash_single(initial_leaf);
+        // let initial_leaf = initial_leaf; //Self::compute_hash_single(initial_leaf);
         let mut nodes = vec![initial_leaf; num_nodes as usize];
 
         println!("num_leaves: {}", num_leaves);
@@ -188,7 +188,7 @@ pub fn index_to_depth_offset(index: usize) -> (usize, usize) {
     // 2^d - 1 = i - off =>
     // 2^d = i - off + 1 =>
     // 2^d <= i + 1
-    let mut depth = 0 as usize;
+    let mut depth = 0_usize;
 
     // We stop one before  2^d > i + 1, so do the check with
     // 2^(d+1) and we can increment from zero.
@@ -198,9 +198,9 @@ pub fn index_to_depth_offset(index: usize) -> (usize, usize) {
     // => - off = 2^d - 1 + i =>
     // off = -2^d + 1 + i
     println!("depth: {}, index: {}", depth, index);
-    let offset = -2isize.pow(depth as u32) + 1 + index as isize;
+    let offset = -(2isize.pow(depth as u32)) + 1 + index as isize;
     println!("offset: {}", offset);
-    (depth as usize, offset as usize)
+    (depth, offset as usize)
 }
 
 /// Returns true if the index is a left child.
@@ -218,12 +218,10 @@ pub fn parent_index(index: u32) -> Option<u32> {
     if index == 0 {
         println!("index is zero");
         None
+    } else if index_is_left_child(index) {
+        Some((index - 1) / 2)
     } else {
-        if index_is_left_child(index) {
-            Some((index - 1) / 2)
-        } else {
-            Some((index - 2) / 2)
-        }
+        Some((index - 2) / 2)
     }
 }
 
