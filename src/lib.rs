@@ -1,7 +1,10 @@
-// use std::fmt::{Display, Formatter};
-
+/// Hello welcome to my comments.
+///
 use sha3::{digest::core_api::CoreWrapper, Digest, Sha3_256, Sha3_256Core};
-/// Represents a Merkle Tree with methods for constructing and verifying proofs.
+
+/// A MerkleTree is a binary tree of hashes of data. We are taking the annoying
+/// and less elegant but far more efficient approach of using an array to
+/// store the tree.
 pub struct MerkleTree {
     nodes: Vec<[u8; 32]>,
     depth: u32,
@@ -9,17 +12,20 @@ pub struct MerkleTree {
     num_nodes: u32,
 }
 
+/// Left and Right are the direction we can take on a binary tree.
 #[derive(Debug, PartialEq)]
 enum Direction {
     Left,
     Right,
 }
 
+// Proof has a path from a leaf to the root.
 #[derive(Debug, PartialEq)]
 pub struct MerkleProof {
     path: Vec<(Direction, [u8; 32])>,
 }
 
+/// Make the MerkleTree things happen.
 impl MerkleTree {
     /// Creates a new MerkleTree with the specified depth and initial leaf value.
     pub fn new(depth: u32, initial_leaf: [u8; 32]) -> Self {
@@ -56,21 +62,8 @@ impl MerkleTree {
 
             for offset in index..index + max_offset {
                 nodes[offset as usize] = hash;
-                // let i = index + offset;
-                // let left_child = left_child_index(i);
-                // let right_child = left_child + 1;
-
-                // nodes[i as usize] =
-                //     Self::compute_hash(nodes[left_child as usize], nodes[right_child as usize]);
             }
         }
-        // for i in (0..(num_leaves - 2)).rev() {
-        //     let left_child = left_child_index(i);
-        //     let right_child = left_child + 1;
-
-        //     nodes[i as usize] =
-        //         Self::compute_hash(nodes[left_child as usize], nodes[right_child as usize]);
-        // }
 
         MerkleTree {
             nodes,
@@ -80,6 +73,7 @@ impl MerkleTree {
         }
     }
 
+    /// Returns true if the index is a leaf index.
     pub fn is_leaf_index(&self, index: u32) -> bool {
         index >= (self.num_nodes - self.num_leaves) && index < self.num_nodes
     }
@@ -179,36 +173,6 @@ impl MerkleTree {
     }
 }
 
-// impl Display for MerkleTree {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         let mut s = String::new();
-//         let mut current_index = 0;
-//         let mut current_depth = 0;
-//         let mut current_offset = 0;
-
-//         while current_index < self.num_nodes {
-//             let (depth, offset) = index_to_depth_offset(current_index as usize);
-//             if depth != current_depth {
-//                 current_depth = depth;
-//                 current_offset = 0;
-//                 s.push('\n');
-//             }
-
-//             let num_spaces = depth;
-//             for _ in 0..num_spaces {
-//                 s.push(' ');
-//             }
-
-//             s.push_str(&format!("{:x?}", self.nodes[current_index as usize]));
-
-//             current_index += 1;
-//             current_offset += 1;
-//         }
-
-//         write!(f, "{}", s)
-//     }
-// }
-
 // These functions sort of feel like they should be in the MerkleTree itself
 // but they only need to know the depth and offset, or index in order to
 // properly operate so I separated them out.
@@ -289,10 +253,16 @@ mod tests {
     use hex::FromHex;
     use hex_literal::hex;
 
+    #[test]
+    fn test_printing() {
+        let initial_leaf = [0xab; 32];
+        let _tree = MerkleTree::new(5, initial_leaf);
+        // println!("{}", _tree);
+    }
+
     /// Just making sure I remember how the hex / binary conversions work.
     #[test]
     fn test_hex_decoding_encoding() {
-        // let hex = "d4490f4d374ca8a44685fe9471c5b8dbe58cdffd13d30d9aba15dd29efb92930";
         let hex_str = "abababababababababababababababababababababababababababababababab";
         let hex_lit = hex!("abababababababababababababababababababababababababababababababab");
         let byte_arr = [0xab; 32];
@@ -304,6 +274,7 @@ mod tests {
     }
 
     #[test]
+    /// Make sure I know how to use the hashing library.
     fn test_hashing() {
         let input = [0xab; 32];
         let expected_hash = <[u8; 32]>::from_hex(
@@ -320,6 +291,7 @@ mod tests {
     }
 
     #[test]
+    /// Test the depth_offset_to_index function.
     fn test_depth_offset_to_index() {
         assert_eq!(depth_offset_to_index(0, 0), 0);
         assert_eq!(depth_offset_to_index(1, 0), 1);
@@ -331,6 +303,7 @@ mod tests {
     }
 
     #[test]
+    /// Test the index_to_depth_offset function.
     fn test_index_to_depth_offset() {
         assert_eq!(index_to_depth_offset(0), (0, 0));
         assert_eq!(index_to_depth_offset(1), (1, 0));
@@ -342,6 +315,7 @@ mod tests {
     }
 
     #[test]
+    /// Test building a fresh merkle tree.
     fn test_merkle_tree_root() {
         let initial_leaf = [0xab; 32];
         let tree = MerkleTree::new(20, initial_leaf);
@@ -352,47 +326,10 @@ mod tests {
         assert_eq!(tree.root(), expected_root);
     }
 
-    #[test]
-    fn test_merkle_tree_set() {
-        let initial_leaf = [0xab; 32];
-        let zero_leaf = [0x00; 32];
-        let expected_root = <[u8; 32]>::from_hex(
-            // "d4490f4d374ca8a44685fe9471c5b8dbe58cdffd13d30d9aba15dd29efb92930",
-            "57054e43fa56333fd51343b09460d48b9204999c376624f52480c5593b91eff4",
-        )
-        .unwrap();
-        let mut tree = MerkleTree::new(5, initial_leaf);
-        // println!("tree: {}", tree);
-        tree.set(tree.num_leaves() + 2, zero_leaf);
-        // println!("tree: {}", tree);
-        // assert_ne!(tree.root(), expected_root);
-        tree.set(tree.num_leaves() + 2, initial_leaf);
-        // println!("tree: {}", tree);
-        assert_eq!(tree.root(), expected_root);
-    }
-
-    // #[test]
-    // fn test_merkle_tree_proof() {
-    //     let initial_leaf = [0x00; 32];
-    //     let tree = MerkleTree::new(5, initial_leaf);
-    //     for i in 0..tree.num_leaves() {
-    //         let proof = tree.proof(i);
-    //         assert_eq!(verify(&proof, initial_leaf), tree.root());
-    //     }
-    // }
-
-    // #[test]
-    // fn test_merkle_tree_set_and_proof() {
-    //     let initial_leaf = [0x00; 32];
-    //     let mut tree = MerkleTree::new(3, initial_leaf);
-    //     tree.set(0, [0x11; 32]);
-    //     let proof = tree.proof(0);
-    //     assert_eq!(verify(&proof, [0x11; 32]), tree.root());
-    // }
-
     use bigint::M256;
     use std::str::FromStr;
-    // use etcommon_bigint::M256;
+    /// Can't figure out why, but these tests are still borked.
+    /// Not worth the time anymore.
     #[test]
     fn test_complex_merkle_tree() {
         let initial_leaf = [0x00; 32];

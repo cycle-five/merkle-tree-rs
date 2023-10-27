@@ -1,0 +1,46 @@
+name: Fmt and lint and test
+
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    if: github.event_name == 'push'        
+    name: Fmt and clippy
+    strategy:
+      matrix:
+        rust-version: ['nightly', 'stable']
+        cache-key: ['']
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      
+      - name: "Install Rust"
+        run: |
+          rustup toolchain install ${{ matrix.rust-version }} --profile minimal --no-self-update
+          rustup default ${{ matrix.rust-version }}
+          rustup component add rustfmt clippy --toolchain ${{ matrix.rust-version }}
+        shell: bash
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.cache-key }}
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        if: success() || failure()
+        run: cargo clippy --all -- -D clippy::all -D warnings
+
+      - name: Run Unit Tests
+        run: cargo test
+        
