@@ -1,4 +1,8 @@
-use std::sync::RwLock;
+use std::{
+    fmt::{Display, Formatter},
+    num::ParseIntError,
+    sync::RwLock,
+};
 
 /// Hello welcome to my comments.
 ///
@@ -33,7 +37,7 @@ impl MerkleTree {
     pub fn new(depth: u32, initial_leaf: [u8; 32]) -> Self {
         let num_leaves = 2u32.pow(depth - 1);
         let num_nodes = 2 * num_leaves - 1;
-        let start_leaf_index = num_nodes - num_leaves;
+        let _start_leaf_index = num_nodes - num_leaves;
 
         // Initial leaves are *not* hashed.
         // We initial every node to the initial leaf value, we will set the values
@@ -147,7 +151,7 @@ impl MerkleTree {
             // return;
         }
 
-        self.nodes.write().unwrap()[leaf_index as usize] = Self::compute_hash_single(value);
+        self.nodes.write().unwrap()[leaf_index as usize] = value; //Self::compute_hash_single(value);
         let mut current_index = leaf_index;
         println!("leaf_index: {}", leaf_index);
 
@@ -189,23 +193,31 @@ impl MerkleTree {
 
     /// Generates a Merkle proof for a given leaf index.
     pub fn proof(&self, leaf_index: u32) -> MerkleProof {
-        let mut current_index = leaf_index;
+        let mut current_index = self.num_nodes() - self.num_leaves() + leaf_index;
         let mut path = Vec::new();
 
-        while let Some(parent) = parent_index(current_index) {
+        loop {
             let (sibling_index, direction) = if current_index % 2 == 1 {
-                // let sibling_hash = self.nodes[current_index + 1as usize - 1];
-                // path.push((Direction::Right, self.nodes[current_index as usize + 1]));
-                (current_index - 1, Direction::Left)
+                (current_index + 1, Direction::Left)
             } else {
-                // path.push((Direction::Left, self.nodes[current_index as usize - 1]));
-                (current_index + 1, Direction::Right)
+                (current_index - 1, Direction::Right)
             };
-            // let current_hash = self.nodes[current_index as usize];
+            let current_hash = self.nodes.read().unwrap()[current_index as usize];
             let sibling_hash = self.nodes.read().unwrap()[sibling_index as usize];
+            println!(
+                "current_hash: {:x?}, sibling_hash: {:x?}, direction: {:?}",
+                &current_hash[..4],
+                &sibling_hash[..4],
+                direction
+            );
+            // path.push((direction, current_hash));
             path.push((direction, sibling_hash));
 
-            current_index = parent;
+            match parent_index(current_index) {
+                Some(parent) if parent == 0 => break,
+                Some(parent) => current_index = parent,
+                _ => break,
+            }
         }
         MerkleProof { path }
     }
@@ -220,6 +232,39 @@ impl MerkleTree {
 
     pub fn depth(&self) -> u32 {
         self.depth
+    }
+}
+
+impl Display for MerkleTree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let nodes = self.nodes.read().unwrap();
+        let mut s = String::new();
+        for node in nodes.iter() {
+            s.push_str(&format!("{:02x?}", &node[..4]));
+        }
+        write!(f, "{}", s)
+        // let mut current_index = 0;
+        // let mut current_depth = 0;
+        // let mut current_offset = 0;
+
+        // while current_index < self.num_nodes {
+        //     let (depth, offset) = index_to_depth_offset(current_index as usize);
+        //     if depth != current_depth {
+        //         current_depth = depth;
+        //         current_offset = 0;
+        //         s.push_str("\n");
+        //     }
+
+        //     if offset != current_offset {
+        //         current_offset = offset;
+        //         s.push_str(" ");
+        //     }
+
+        //     s.push_str(&format!("{:02x?}", &nodes[current_index as usize][..4]));
+        //     current_index += 1;
+        // }
+
+        // write!(f, "{}", s)
     }
 }
 
@@ -385,7 +430,8 @@ mod tests {
         let initial_leaf = [0x00; 32];
         let mut tree = MerkleTree::new(5, initial_leaf);
 
-        //for i in (tree.num_leaves())..(2 * tree.num_leaves() - 1) {
+        println!("tree: {}", tree);
+        //for i in ((tree.num_leaves())..(2 * tree.num_leaves() - 1)).rev() {
         for i in 0..tree.num_leaves() {
             let mut value: [u8; 32] = [0; 32];
             // let asdf = M256::from_bytes_be(value);
@@ -396,22 +442,22 @@ mod tests {
                 .unwrap();
             val_int.0.to_big_endian(&mut value);
             println!("value: {:x?}", value);
-            tree.set(tree.num_nodes() - 1 - i, value);
+            let set_idx = tree.num_nodes() - tree.num_leaves() + i;
+            println!("set_idx: {}", set_idx);
+            tree.set(set_idx, value);
+            println!("tree: {}", tree);
         }
 
         let expected_root =
             hex!("57054e43fa56333fd51343b09460d48b9204999c376624f52480c5593b91eff4");
         println!("root: {:x?}, expected: {:x?}", tree.root(), expected_root);
-        // assert_eq!(tree.root(), expected_root);
+        assert_eq!(tree.root(), expected_root);
 
         let proof = tree.proof(3);
+        assert!(proof.path.len() == 4);
         let expected_proof = MerkleProof {
             path: vec![
                 (Direction::Right, [0x22; 32]),
-                (
-                    Direction::Right,
-                    hex!("57054e43fa56333fd51343b09460d48b9204999c376624f52480c5593b91eff4"),
-                ),
                 (
                     Direction::Right,
                     hex!("35e794f1b42c224a8e390ce37e141a8d74aa53e151c1d1b9a03f88c65adb9e10"),
