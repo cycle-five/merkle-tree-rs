@@ -1,6 +1,5 @@
 use std::{
     fmt::{Display, Formatter},
-    num::ParseIntError,
     sync::RwLock,
 };
 
@@ -214,8 +213,7 @@ impl MerkleTree {
             path.push((direction, sibling_hash));
 
             match parent_index(current_index) {
-                Some(parent) if parent == 0 => break,
-                Some(parent) => current_index = parent,
+                Some(parent) if parent != 0 => current_index = parent,
                 _ => break,
             }
         }
