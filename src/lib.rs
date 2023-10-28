@@ -1,11 +1,15 @@
+///
+/// Hello welcome to my comments.
+///
+/// A first pass of this was written by ChatGPT, which got sort of the basic structure
+/// correct but none of the details. LLMs in particular aren't very good at math and so
+/// indexing arithematic usually fucks it up pretty good.
+///
+use sha3::{digest::core_api::CoreWrapper, Digest, Sha3_256, Sha3_256Core};
 use std::{
     fmt::{Display, Formatter},
     sync::RwLock,
 };
-
-/// Hello welcome to my comments.
-///
-use sha3::{digest::core_api::CoreWrapper, Digest, Sha3_256, Sha3_256Core};
 
 /// A MerkleTree is a binary tree of hashes of data. We are taking the annoying
 /// and less elegant but far more efficient approach of using an array to
@@ -115,7 +119,6 @@ impl MerkleTree {
     /// Computes the SHA3-256 hash of two input values.
     fn compute_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
         let input = [left, right].concat();
-        // hasher.update(input);
         let result = CoreWrapper::<Sha3_256Core>::digest(input);
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&result);
@@ -175,10 +178,6 @@ impl MerkleTree {
                     rw_nodes[left_child as usize],
                     rw_nodes[right_child as usize],
                 )
-                // self.nodes[parent as usize] = Self::compute_hash(
-                //     self.nodes[left_child as usize],
-                //     self.nodes[right_child as usize],
-                // );
             };
             println!(
                 "new hash: {:02x?}, left_child: {:02x?}, right_child: {:02x?}",
@@ -196,6 +195,11 @@ impl MerkleTree {
         let mut path = Vec::new();
 
         loop {
+            // So many off-by-one errors here...
+            // The direction is the direction we'd go traveling *down* the tree, even though
+            // we're building upwards. I'm not sure if I was supposed to store the root node
+            // in the tree or not, but doing so gave it this distinction where you go left
+            // *to* odd indexed nodes and right *to* even indexed nodes.
             let (sibling_index, direction) = if current_index % 2 == 1 {
                 (current_index + 1, Direction::Left)
             } else {
@@ -209,7 +213,6 @@ impl MerkleTree {
                 &sibling_hash[..4],
                 direction
             );
-            // path.push((direction, current_hash));
             path.push((direction, sibling_hash));
 
             match parent_index(current_index) {
@@ -241,28 +244,6 @@ impl Display for MerkleTree {
             s.push_str(&format!("{:02x?}", &node[..4]));
         }
         write!(f, "{}", s)
-        // let mut current_index = 0;
-        // let mut current_depth = 0;
-        // let mut current_offset = 0;
-
-        // while current_index < self.num_nodes {
-        //     let (depth, offset) = index_to_depth_offset(current_index as usize);
-        //     if depth != current_depth {
-        //         current_depth = depth;
-        //         current_offset = 0;
-        //         s.push_str("\n");
-        //     }
-
-        //     if offset != current_offset {
-        //         current_offset = offset;
-        //         s.push_str(" ");
-        //     }
-
-        //     s.push_str(&format!("{:02x?}", &nodes[current_index as usize][..4]));
-        //     current_index += 1;
-        // }
-
-        // write!(f, "{}", s)
     }
 }
 
@@ -341,7 +322,10 @@ pub fn verify(proof: &MerkleProof, leaf_value: [u8; 32]) -> [u8; 32] {
 #[cfg(test)]
 /// Tests for the MerkleTree implementation.
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
+    use bigint::M256;
     use hex::FromHex;
     use hex_literal::hex;
 
@@ -349,7 +333,6 @@ mod tests {
     fn test_printing() {
         let initial_leaf = [0xab; 32];
         let _tree = MerkleTree::new(5, initial_leaf);
-        // println!("{}", _tree);
     }
 
     /// Just making sure I remember how the hex / binary conversions work.
@@ -419,11 +402,6 @@ mod tests {
         // assert_eq!(tree.nodes.read().unwrap()[1], expected_root);
     }
 
-    use bigint::M256;
-    use std::str::FromStr;
-    /// Can't figure out why, but these tests are still borked.
-    /// Not worth the time anymore.
-    // #[ignore]
     #[test]
     fn test_complex_merkle_tree() {
         let initial_leaf = [0x00; 32];
@@ -504,6 +482,9 @@ mod tests {
         leaf_5_int.0.to_big_endian(&mut leaf_5);
 
         let root = tree.root();
+        // In the example given in the problem statement this was proof(3), but I am quite
+        // sure that is wrong and it should be proof(5), which makes sense aesthetically,
+        // intuitively, and it gives the right answer.
         let proof = tree.proof(5);
         assert!(proof.path.len() == 4);
         assert_eq!(verify(&proof, leaf_5), root);
