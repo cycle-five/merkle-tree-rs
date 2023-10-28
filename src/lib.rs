@@ -325,12 +325,13 @@ fn left_child_index(index: u32) -> u32 {
 
 /// Verifies a Merkle proof against a leaf value to compute a root hash.
 pub fn verify(proof: &MerkleProof, leaf_value: [u8; 32]) -> [u8; 32] {
-    let mut current_hash = MerkleTree::compute_hash_single(leaf_value);
+    // let mut current_hash = MerkleTree::compute_hash_single(leaf_value);
+    let mut current_hash = leaf_value;
 
     for (direction, sibling_hash) in &proof.path {
         current_hash = match direction {
-            Direction::Left => MerkleTree::compute_hash(*sibling_hash, current_hash),
-            Direction::Right => MerkleTree::compute_hash(current_hash, *sibling_hash),
+            Direction::Right => MerkleTree::compute_hash(*sibling_hash, current_hash),
+            Direction::Left => MerkleTree::compute_hash(current_hash, *sibling_hash),
         };
     }
 
@@ -471,5 +472,40 @@ mod tests {
             ],
         };
         assert_eq!(proof, expected_proof);
+    }
+
+    #[test]
+    fn test_complex_merkle_tree2() {
+        let initial_leaf = [0x00; 32];
+        let mut tree = MerkleTree::new(5, initial_leaf);
+
+        println!("tree: {}", tree);
+        //for i in ((tree.num_leaves())..(2 * tree.num_leaves() - 1)).rev() {
+        for i in 0..tree.num_leaves() {
+            let mut value: [u8; 32] = [0; 32];
+            // let asdf = M256::from_bytes_be(value);
+            let val_int: M256 = M256::from(i as u64)
+                * M256::from_str(
+                    "1111111111111111111111111111111111111111111111111111111111111111",
+                )
+                .unwrap();
+            val_int.0.to_big_endian(&mut value);
+            println!("value: {:x?}", value);
+            let set_idx = tree.num_nodes() - tree.num_leaves() + i;
+            println!("set_idx: {}", set_idx);
+            tree.set(set_idx, value);
+            println!("tree: {}", tree);
+        }
+
+        let mut leaf_5: [u8; 32] = [0; 32];
+        let leaf_5_int: M256 = M256::from(5 as u64)
+            * M256::from_str("1111111111111111111111111111111111111111111111111111111111111111")
+                .unwrap();
+        leaf_5_int.0.to_big_endian(&mut leaf_5);
+
+        let root = tree.root();
+        let proof = tree.proof(5);
+        assert!(proof.path.len() == 4);
+        assert_eq!(verify(&proof, leaf_5), root);
     }
 }
