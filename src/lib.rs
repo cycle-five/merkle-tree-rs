@@ -1,3 +1,5 @@
+use std::sync::RwLock;
+
 /// Hello welcome to my comments.
 ///
 use sha3::{digest::core_api::CoreWrapper, Digest, Sha3_256, Sha3_256Core};
@@ -6,7 +8,7 @@ use sha3::{digest::core_api::CoreWrapper, Digest, Sha3_256, Sha3_256Core};
 /// and less elegant but far more efficient approach of using an array to
 /// store the tree.
 pub struct MerkleTree {
-    nodes: Vec<[u8; 32]>,
+    nodes: RwLock<Vec<[u8; 32]>>,
     depth: u32,
     num_leaves: u32,
     num_nodes: u32,
@@ -29,20 +31,22 @@ pub struct MerkleProof {
 impl MerkleTree {
     /// Creates a new MerkleTree with the specified depth and initial leaf value.
     pub fn new(depth: u32, initial_leaf: [u8; 32]) -> Self {
-        let num_leaves = 2u32.pow(depth);
+        let num_leaves = 2u32.pow(depth - 1);
         let num_nodes = 2 * num_leaves - 1;
+        let start_leaf_index = num_nodes - num_leaves;
 
-        // It was a bit ambigious in the problem definition but it seems the
-        // leaves are indeed hashed values.
-        // let initial_leaf = initial_leaf; //Self::compute_hash_single(initial_leaf);
+        // Initial leaves are *not* hashed.
+        // We initial every node to the initial leaf value, we will set the values
+        // of each nodes layer by layer since we know the initial value of all the
+        // leaves and parents are computed from their children.
         let mut nodes = vec![initial_leaf; num_nodes as usize];
 
         println!("num_leaves: {}", num_leaves);
         println!("num_leaves - 1: {}", num_leaves - 1);
         println!("2 * num_leaves - 1: {}", 2 * num_leaves - 1);
-        for i in (num_leaves - 1)..(2 * num_leaves - 1) {
-            nodes[i as usize] = initial_leaf;
-        }
+        // for i in start_leaf_index..num_nodes {
+        //     nodes[i as usize] = initial_leaf;
+        // }
 
         println!("depth: {}", depth);
 
@@ -53,6 +57,33 @@ impl MerkleTree {
             let i = index;
             let left_child = left_child_index(i);
             let right_child = left_child + 1;
+
+            // Is it worth converting these to strings?
+            // let asdf = nodes[left_child as usize][..4]
+            //     .iter()
+            //     .map(|x| x.to_string())
+            //     .reduce(|x, y| x + y.as_str())
+            //     .unwrap_or_default();
+
+            // This was to verify that each layer was correct getting set.
+            //---- tests::test_complex_merkle_tree stdout ----
+            // num_leaves: 32
+            // num_leaves - 1: 31
+            // 2 * num_leaves - 1: 63
+            // depth: 5
+            // depth: 3, left_child: 15, right_child: 16, right_child_hash: [0, 0, 0, 0], left_child_hash: [0, 0, 0, 0]
+            // index: 7, max_offset: 8, hash: [7, f, a1, ab, 6f, cc, 55, 7e, d1, 4d, 42, 94, 1f, 19, 67, 69, 30, 48, 55, 1e, b9, 4, 2a, 8d, a, 5, 7a, fb, d7, 5e, 81, e0]
+            // depth: 2, left_child: 7, right_child: 8, right_child_hash: [7, f, a1, ab], left_child_hash: [7, f, a1, ab]
+            // index: 3, max_offset: 4, hash: [53, da, b0, 42, 30, 8a, b7, 1, b0, 73, ed, d4, d1, 4c, 56, 54, a1, f7, d, 21, b, 67, e, f2, 88, c9, ae, ea, 9c, 4a, 45, 30]
+            // depth: 1, left_child: 3, right_child: 4, right_child_hash: [53, da, b0, 42], left_child_hash: [53, da, b0, 42]
+            // index: 1, max_offset: 2, hash: [73, 29, f2, 9d, ca, e8, 88, 3e, 1, 4c, 3c, f1, 5b, 1b, dc, be, e8, 81, cb, de, 1c, 33, aa, cd, ca, 22, 3d, 5a, 0, dd, 6f, fe]
+            // depth: 0, left_child: 1, right_child: 2, right_child_hash: [73, 29, f2, 9d], left_child_hash: [73, 29, f2, 9d]
+            // index: 0, max_offset: 1, hash: [b9, e1, 27, 4e, 6, d4, 3b, 40, 3, 22, 37, 12, d2, 71, fe, 11, b3, 85, 99, e7, 75, 3d, ba, ab, 11, 1a, c1, 16, 1f, 82, f4, 5e]
+            // value: [22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 20]
+            println!(
+                "depth: {}, left_child: {}, right_child: {}, right_child_hash: {:x?}, left_child_hash: {:x?}",
+                d, left_child, right_child, &nodes[left_child as usize][..4], &nodes[right_child as usize][..4]
+            );
             let hash = Self::compute_hash(nodes[left_child as usize], nodes[right_child as usize]);
 
             println!(
@@ -66,7 +97,7 @@ impl MerkleTree {
         }
 
         MerkleTree {
-            nodes,
+            nodes: RwLock::new(nodes),
             depth,
             num_leaves,
             num_nodes,
@@ -100,7 +131,7 @@ impl MerkleTree {
 
     /// Returns the root hash of the MerkleTree.
     pub fn root(&self) -> [u8; 32] {
-        self.nodes[0]
+        self.nodes.read().unwrap()[0]
     }
 
     /// Updates a single leaf value and recomputes affected nodes.
@@ -113,26 +144,45 @@ impl MerkleTree {
         if !self.is_leaf_index(leaf_index) {
             println!("index is not a lea!!!");
             println!("leaf_index: {}, num_nodes: {}", leaf_index, self.num_nodes);
-            return;
+            // return;
         }
 
-        self.nodes[leaf_index as usize] = Self::compute_hash_single(value);
+        self.nodes.write().unwrap()[leaf_index as usize] = Self::compute_hash_single(value);
         let mut current_index = leaf_index;
+        println!("leaf_index: {}", leaf_index);
 
         while let Some(parent) = parent_index(current_index) {
             assert!(!self.is_leaf_index(parent), "parent is a leaf?!??!");
             let left_child = left_child_index(parent);
             let right_child = left_child + 1;
             println!(
-                "parent: {}, left_child: {}, right_child: {}, hash: {:x?}",
-                parent, left_child, right_child, self.nodes[parent as usize]
+                "parent: {}, old_hash: {:02x?}",
+                parent,
+                &self.nodes.read().unwrap()[parent as usize][..4]
             );
 
-            self.nodes[parent as usize] = Self::compute_hash(
-                self.nodes[left_child as usize],
-                self.nodes[right_child as usize],
+            let (parent_hash, left_child_hash, right_child_hash) = {
+                let mut rw_nodes = self.nodes.write().unwrap();
+                rw_nodes[parent as usize] = Self::compute_hash(
+                    rw_nodes[left_child as usize],
+                    rw_nodes[right_child as usize],
+                );
+                (
+                    rw_nodes[parent as usize],
+                    rw_nodes[left_child as usize],
+                    rw_nodes[right_child as usize],
+                )
+                // self.nodes[parent as usize] = Self::compute_hash(
+                //     self.nodes[left_child as usize],
+                //     self.nodes[right_child as usize],
+                // );
+            };
+            println!(
+                "new hash: {:02x?}, left_child: {:02x?}, right_child: {:02x?}",
+                &parent_hash[..4],
+                &left_child_hash[..4],
+                &right_child_hash[..4]
             );
-            println!("new hash: {:x?}", self.nodes[parent as usize]);
             current_index = parent;
         }
     }
@@ -146,13 +196,13 @@ impl MerkleTree {
             let (sibling_index, direction) = if current_index % 2 == 1 {
                 // let sibling_hash = self.nodes[current_index + 1as usize - 1];
                 // path.push((Direction::Right, self.nodes[current_index as usize + 1]));
-                (current_index + 1, Direction::Left)
+                (current_index - 1, Direction::Left)
             } else {
                 // path.push((Direction::Left, self.nodes[current_index as usize - 1]));
-                (current_index - 1, Direction::Right)
+                (current_index + 1, Direction::Right)
             };
             // let current_hash = self.nodes[current_index as usize];
-            let sibling_hash = self.nodes[sibling_index as usize];
+            let sibling_hash = self.nodes.read().unwrap()[sibling_index as usize];
             path.push((direction, sibling_hash));
 
             current_index = parent;
@@ -322,19 +372,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(tree.root(), expected_root);
+        // assert_eq!(tree.nodes.read().unwrap()[1], expected_root);
     }
 
     use bigint::M256;
     use std::str::FromStr;
     /// Can't figure out why, but these tests are still borked.
     /// Not worth the time anymore.
-    #[ignore]
+    // #[ignore]
     #[test]
     fn test_complex_merkle_tree() {
         let initial_leaf = [0x00; 32];
         let mut tree = MerkleTree::new(5, initial_leaf);
 
-        for i in (tree.num_leaves() - 1)..(2 * tree.num_leaves() - 1) {
+        //for i in (tree.num_leaves())..(2 * tree.num_leaves() - 1) {
+        for i in 0..tree.num_leaves() {
             let mut value: [u8; 32] = [0; 32];
             // let asdf = M256::from_bytes_be(value);
             let val_int: M256 = M256::from(i as u64)
@@ -344,7 +396,7 @@ mod tests {
                 .unwrap();
             val_int.0.to_big_endian(&mut value);
             println!("value: {:x?}", value);
-            tree.set(i, value);
+            tree.set(tree.num_nodes() - 1 - i, value);
         }
 
         let expected_root =
