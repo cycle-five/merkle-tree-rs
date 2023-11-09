@@ -1,3 +1,4 @@
+This is the take home test I was given by Tools for Humanity. I believe in open and free information and this is my own labor. Anyone may use or edit or re-use this, without attribution, and claim it as their own if it's helpful in any way.
 ## Binary Merkle Trees
 Given a binary tree: 
 ```
